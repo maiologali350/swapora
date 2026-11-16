@@ -491,6 +491,12 @@
     const v = parseFloat(inAmount.value);
     if (isNaN(v) || v <= 0){ showToast('Enter an amount first.'); return; }
     try {
+      // Re-sync with the wallet's currently active account — if the user switched
+      // accounts in the wallet, sends from the stored account are rejected (4100).
+      try {
+        const accs = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (accs && accs.length) account = accs[0];
+      } catch(e) { /* keep the stored account */ }
       if (!ethIn) {
         const amtIn0 = ethers.parseUnits(v.toString(), TAMM_DEC);
         const allow = await allowanceRaw();
