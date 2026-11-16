@@ -486,24 +486,24 @@
         const allow = await allowanceRaw();
         if (allow < amtIn0) {
           swapBtn.textContent = 'Approving…';
-          const txA = await tamm(false).approve(ROUTER, amtIn0);
+          const txA = await tamm(false).approve(ROUTER, amtIn0, { gasLimit: 100000n });
           await txA.wait();
           showToast('tAMM approved. Now press Swap.');
           await updateQuote();
           return;
         }
       }
-      if (lastQuoteRaw === null) await updateQuote();
+      await updateQuote();
       if (lastQuoteRaw === null){ showToast('Could not get a quote — try a smaller amount.'); return; }
       const minOut = lastQuoteRaw * BigInt(Math.floor((1 - SLIPPAGE) * 10000)) / 10000n;
       swapBtn.textContent = 'Swapping…';
       let tx;
       if (ethIn) {
         tx = await router().swapPoolExactInNative(
-          POOL, minOut, account, deadline(), ZERO, { value: ethers.parseEther(v.toString()) });
+          POOL, minOut, account, deadline(), ZERO, { value: ethers.parseEther(v.toString()), gasLimit: 600000n });
       } else {
         tx = await router().swapPoolExactInForNative(
-          POOL, TAMM, ethers.parseUnits(v.toString(), TAMM_DEC), minOut, account, deadline(), ZERO);
+          POOL, TAMM, ethers.parseUnits(v.toString(), TAMM_DEC), minOut, account, deadline(), ZERO, { gasLimit: 600000n });
       }
       showToast('Transaction sent — waiting for confirmation…');
       await tx.wait();
