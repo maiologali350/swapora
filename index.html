@@ -257,7 +257,7 @@
       <a class="logo" href="#home"><span class="logo-mark">S</span>Swapora</a>
       <div class="app-actions">
         <a class="backlink" href="#home">&larr; Back to home</a>
-        <button class="btn btn-dark" id="navConnect">Connect Wallet</button>
+        <button class="btn btn-dark" id="walletBtn">Connect Wallet</button>
       </div>
     </div>
   </div>
@@ -270,7 +270,7 @@
       <div class="field">
         <label>You pay</label>
         <div class="field-row">
-          <input id="inAmount" type="number" min="0" step="any" placeholder="0.0" value="1" />
+          <input id="inAmount" type="number" min="0" step="any" placeholder="0.0" value="0.01" />
           <span class="token"><span class="ic" style="background:#627EEA">Ξ</span><span id="inSymbol">ETH</span></span>
         </div>
         <div class="bal"><span>Balance: <span id="inBal">—</span></span><button id="maxBtn" type="button">MAX</button></div>
@@ -326,7 +326,7 @@
   const outBalEl = document.getElementById('outBal');
   const rateText = document.getElementById('rateText');
   const swapBtn = document.getElementById('swapBtn');
-  const navConnect = document.getElementById('navConnect');
+  const navConnect = document.getElementById('walletBtn');
 
   let ethIn = true; // true: ETH -> tAMM, false: tAMM -> ETH
   let provider = null, signer = null, account = null;
@@ -369,6 +369,14 @@
     lastQuoteRaw = null;
     const v = parseFloat(inAmount.value);
     if (!account || isNaN(v) || v <= 0){ outAmount.value=''; updateButton(); return; }
+    try {
+      if (ethIn && ethBalWei !== null && ethers.parseEther(v.toString()) > ethBalWei) {
+        outAmount.value = ''; rateText.textContent = 'Insufficient ETH balance on GIWA Sepolia'; updateButton(); return;
+      }
+      if (!ethIn && tammBalRaw !== null && ethers.parseUnits(v.toString(), TAMM_DEC) > tammBalRaw) {
+        outAmount.value = ''; rateText.textContent = 'Insufficient tAMM balance'; updateButton(); return;
+      }
+    } catch(e) { /* unparsable amount — fall through to simulation */ }
     if (quoteBusy) return;
     quoteBusy = true;
     try {
@@ -390,7 +398,7 @@
         rateText.textContent = `1 tAMM ≈ ${(parseFloat(ethers.formatEther(out)) / v).toFixed(6)} ETH`;
       }
     } catch(e) {
-      outAmount.value = ''; rateText.textContent = 'Quote unavailable — pool may have low liquidity';
+      outAmount.value = ''; rateText.textContent = 'Quote failed — amount may exceed your balance or pool liquidity';
     }
     quoteBusy = false;
     updateButton();
@@ -466,7 +474,7 @@
       showToast('Wallet connected on GIWA Sepolia: ' + shortAddr(account));
     } catch(e) { showToast('Connection rejected in wallet.'); }
   }
-  navConnect.addEventListener('click', (e) => { if (!account) { /* let anchor scroll to swap */ } });
+  navConnect.addEventListener('click', () => { if (!account) connect(); });
 
   swapBtn.addEventListener('click', async () => {
     if (!account){ connect(); return; }
@@ -513,13 +521,32 @@
     window.open('https://ammora.org/waitlist?ref=3ebliu', '_blank');
   });
 
+  // Silent reconnect: if the wallet already authorised this site, restore the session without a popup.
+  (async function init(){
+    if (!window.ethereum) return;
+    try {
+      const accs = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accs && accs.length) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const net = await provider.getNetwork();
+        if (Number(net.chainId) !== GIWA_CHAIN_ID) return; // Connect button will switch chains properly
+        signer = await provider.getSigner();
+        account = accs[0];
+        navConnect.textContent = shortAddr(account);
+        await refreshBalances();
+        updateButton();
+        scheduleQuote();
+      }
+    } catch(e) { /* not authorised yet — Connect button handles it */ }
+  })();
+
   if (window.ethereum) {
     window.ethereum.on && window.ethereum.on('accountsChanged', () => location.reload());
     window.ethereum.on && window.ethereum.on('chainChanged', () => location.reload());
   }
 </script>
 <script>
-  document.getElementById('navConnect').addEventListener('click', function(){
+  document.getElementById('walletBtn').addEventListener('click', function(){
     if (typeof connect === 'function') connect();
   });
 </script>
