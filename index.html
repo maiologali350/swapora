@@ -439,7 +439,7 @@
       } else {
         const amtIn = ethers.parseUnits(v.toString(), TAMM_DEC);
         const allow = await allowanceRaw();
-        if (allow < amtIn) { outAmount.value = ''; rateText.textContent = 'Approve tAMM to see a live quote'; updateButton(); return; }
+        if (allow < amtIn) { outAmount.value = ''; rateText.textContent = 'One-time approval runs automatically on your first sell'; updateButton(); return; }
         const out = await r.swapPoolExactInForNative.staticCall(
           POOL, TAMM, amtIn, 0, account, deadline(), ZERO);
         lastQuoteRaw = out;
@@ -460,10 +460,6 @@
     if (!account){ swapBtn.textContent = 'Connect Wallet'; return; }
     const v = parseFloat(inAmount.value);
     if (isNaN(v) || v <= 0){ swapBtn.textContent = 'Enter an amount'; return; }
-    if (!ethIn) {
-      const allow = await allowanceRaw();
-      if (allow < ethers.parseUnits(v.toString(), TAMM_DEC)){ swapBtn.textContent = 'Approve tAMM'; return; }
-    }
     swapBtn.textContent = 'Swap';
   }
 
@@ -561,13 +557,15 @@
         const amtIn0 = ethers.parseUnits(v.toString(), TAMM_DEC);
         const allow = await allowanceRaw();
         if (allow < amtIn0) {
+          // Auto-approve: one large approval, signed once, so future sells
+          // never ask again — then fall through and swap in the same click.
           swapBtn.textContent = 'Approving…';
-          const dataA = erc20Iface.encodeFunctionData('approve', [ROUTER, amtIn0]);
+          showToast('Approving tAMM — confirm in your wallet…');
+          const bigAllow = ethers.parseUnits('1000000000', TAMM_DEC);
+          const dataA = erc20Iface.encodeFunctionData('approve', [ROUTER, bigAllow]);
           const hashA = await sendViaWallet(TAMM, dataA, 0n, '0x186A0');
           await provider.waitForTransaction(hashA);
-          showToast('tAMM approved. Now press Swap.');
-          await updateQuote();
-          return;
+          showToast('Approved — now confirm the swap in your wallet…');
         }
       }
       await updateQuote();
